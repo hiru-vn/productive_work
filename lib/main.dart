@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:percent_indicator/percent_indicator.dart';
 import 'package:productive_work/const.dart';
 import 'package:productive_work/rate.dart';
@@ -45,9 +46,11 @@ class App extends StatefulWidget {
 
 class _AppState extends State<App> {
   Timer? timer;
+  int lastTimeInteract = DateTime.now().millisecondsSinceEpoch;
 
   @override
   void initState() {
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive, overlays: []);
     SharedPreferences.getInstance().then((value) {
       prefs = value;
       init();
@@ -72,6 +75,7 @@ class _AppState extends State<App> {
 
   int get amount => amountWorked.round();
   String get counter => formatter.format(amount);
+  bool get showActions => DateTime.now().millisecondsSinceEpoch - lastTimeInteract < 3000;
 
   void init() {
     var timeWorkedSecond = prefs.getInt('timeWorkedSecond') ?? 0;
@@ -82,30 +86,31 @@ class _AppState extends State<App> {
     ratePerHour = ratePerHourSaved;
     var amountWorkedSaved = prefs.getDouble('amountWorked') ?? 0;
     amountWorked = amountWorkedSaved;
+    WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
+      setState(() {});
+    });
   }
 
   void getExRate() {
     getExchangeRate().then((value) {
       prefs.setDouble('exchangeRate', value);
-      setState(() {
-        exchangeRate = value;
-      });
+      exchangeRate = value;
     });
   }
 
   void set() {
-    setState(() {
-      final nowMiliSecond = DateTime.now().millisecondsSinceEpoch;
-      if (!stop) {
+    if (!stop) {
+      setState(() {
+        final nowMiliSecond = DateTime.now().millisecondsSinceEpoch;
         final diff = nowMiliSecond - lastTimeMilisecond;
         var generatedMoney = ratePerHour * diff / 3600000 * exchangeRate;
         miliSecondWorkded += diff;
         amountWorked += generatedMoney;
         prefs.setInt('timeWorkedSecond', (miliSecondWorkded / 1000).round());
         prefs.setDouble('amountWorked', amountWorked);
-      }
-      lastTimeMilisecond = nowMiliSecond;
-    });
+        lastTimeMilisecond = nowMiliSecond;
+      });
+    }
   }
 
   int get durationOfSession {
@@ -125,102 +130,106 @@ class _AppState extends State<App> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Stack(
-          children: [
-            Align(
-              alignment: Alignment.topRight,
-              child: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: IconButton(
-                  icon: const Icon(
-                    Icons.settings,
-                    color: Colors.white24,
+      body: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: () {
+          lastTimeInteract = DateTime.now().millisecondsSinceEpoch;
+        },
+        child: SafeArea(
+          child: Stack(
+            children: [
+              if (showActions)
+                Align(
+                  alignment: Alignment.topRight,
+                  child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: IconButton(
+                      icon: const Icon(
+                        Icons.settings,
+                        color: Colors.white38,
+                      ),
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => const Settings(),
+                          ),
+                        );
+                      },
+                    ),
                   ),
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => const Settings(),
-                      ),
-                    );
-                  },
                 ),
-              ),
-            ),
-            Center(
-              child: Padding(
-                padding: EdgeInsets.only(bottom: MediaQuery.of(context).size.height * .05),
-                child: SizedBox(
-                  width: MediaQuery.of(context).size.width * 0.85,
-                  child: GestureDetector(
-                    onDoubleTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => const Settings(),
+              Center(
+                child: Padding(
+                  padding: EdgeInsets.only(bottom: MediaQuery.of(context).size.height * .05),
+                  child: SizedBox(
+                    width: MediaQuery.of(context).size.width * 0.85,
+                    child: GestureDetector(
+                      onDoubleTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => const Settings(),
+                          ),
+                        );
+                      },
+                      child: CircularPercentIndicator(
+                        curve: Curves.ease,
+                        circularStrokeCap: CircularStrokeCap.round,
+                        radius: MediaQuery.of(context).size.width * 0.425,
+                        lineWidth: 14.0,
+                        percent: durationOfSession / 600,
+                        center: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const SizedBox(height: 50),
+                            AnimatedDigitWidget(
+                              separateSymbol: ',',
+                              separateLength: 3,
+                              enableSeparator: true,
+                              value: amount,
+                              suffix: ' ₫',
+                              textStyle: const TextStyle(
+                                  color: Colors.white, fontWeight: FontWeight.bold, fontSize: 30.0),
+                            ),
+                            const SizedBox(height: 30),
+                            Builder(builder: (context) {
+                              final hour = (miliSecondWorkded / 3600000).floor();
+                              final min = ((miliSecondWorkded - hour * 3600000) ~/ 60000).floor();
+                              return Text(
+                                  true
+                                      ? '${hour}h ${min.toString().padLeft(2, '0')}m'
+                                      : '',
+                                  style: const TextStyle(color: Colors.white30, fontSize: 15));
+                            })
+                          ],
                         ),
-                      );
-                    },
-                    child: CircularPercentIndicator(
-                      curve: Curves.ease,
-                      circularStrokeCap: CircularStrokeCap.round,
-                      radius: MediaQuery.of(context).size.width * 0.425,
-                      lineWidth: 14.0,
-                      percent: durationOfSession / 600,
-                      center: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const SizedBox(height: 70),
-                          amount == 0
-                              ? Text(
-                                  counter,
-                                  style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 28.0),
-                                )
-                              : AnimatedDigitWidget(
-                                  separateSymbol: ',',
-                                  separateLength: 3,
-                                  enableSeparator: true,
-                                  value: amount,
-                                  suffix: ' ₫',
-                                  textStyle: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 30.0),
-                                ),
-                          const SizedBox(height: 50),
-                          Text(
-                              '${(miliSecondWorkded / 3600000).floor()}h ${(miliSecondWorkded ~/ 60000).floor().toString().padLeft(2, '0')}m',
-                              style: const TextStyle(color: Colors.white30, fontSize: 15)),
-                        ],
+                        progressColor: Colors.white,
+                        backgroundColor: Colors.white24,
                       ),
-                      progressColor: Colors.white,
-                      backgroundColor: Colors.white24,
                     ),
                   ),
                 ),
               ),
-            ),
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: Padding(
-                padding: EdgeInsets.only(bottom: MediaQuery.of(context).size.height * .10),
-                child: IconButton(
-                  color: Colors.white24,
-                  icon: Icon(
-                    stop ? Icons.play_arrow_rounded : Icons.pause_rounded,
-                    size: 80,
+              if (showActions)
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Padding(
+                    padding: EdgeInsets.only(bottom: MediaQuery.of(context).size.height * .10),
+                    child: IconButton(
+                      color: Colors.white38,
+                      icon: Icon(
+                        stop ? Icons.play_arrow_rounded : Icons.pause_rounded,
+                        size: 80,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          stop = !stop;
+                        });
+                      },
+                    ),
                   ),
-                  onPressed: () {
-                    setState(() {
-                      stop = !stop;
-                    });
-                  },
-                ),
-              ),
-            )
-          ],
+                )
+            ],
+          ),
         ),
       ),
     );
