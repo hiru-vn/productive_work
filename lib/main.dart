@@ -75,7 +75,7 @@ class _AppState extends State<App> {
 
   int get amount => amountWorked.round();
   String get counter => formatter.format(amount);
-  bool get showActions => DateTime.now().millisecondsSinceEpoch - lastTimeInteract < 3000;
+  bool get showActions => (DateTime.now().millisecondsSinceEpoch - lastTimeInteract < 3000) || stop;
 
   void init() {
     var timeWorkedSecond = prefs.getInt('timeWorkedSecond') ?? 0;
@@ -134,6 +134,9 @@ class _AppState extends State<App> {
         behavior: HitTestBehavior.translucent,
         onTap: () {
           lastTimeInteract = DateTime.now().millisecondsSinceEpoch;
+          if (stop) {
+            setState(() {});
+          }
         },
         child: SafeArea(
           child: Stack(
@@ -194,10 +197,7 @@ class _AppState extends State<App> {
                             Builder(builder: (context) {
                               final hour = (miliSecondWorkded / 3600000).floor();
                               final min = ((miliSecondWorkded - hour * 3600000) ~/ 60000).floor();
-                              return Text(
-                                  true
-                                      ? '${hour}h ${min.toString().padLeft(2, '0')}m'
-                                      : '',
+                              return Text(true ? '${hour}h ${min.toString().padLeft(2, '0')}m' : '',
                                   style: const TextStyle(color: Colors.white30, fontSize: 15));
                             })
                           ],
