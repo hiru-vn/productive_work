@@ -223,6 +223,9 @@ class _AppState extends State<App> {
                       onPressed: () {
                         setState(() {
                           stop = !stop;
+                          if (!stop) {
+                            lastTimeMilisecond = DateTime.now().millisecondsSinceEpoch;
+                          }
                         });
                       },
                     ),
